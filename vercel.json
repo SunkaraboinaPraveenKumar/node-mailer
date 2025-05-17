@@ -1,6 +1,16 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "api/server.js", "use": "@vercel/node" }
-  ]
-}
+    "version": 2,
+    "builds": [
+      {
+        "src": "/server.js",
+        "use": "@vercel/node"
+      }
+    ],
+    "routes": [
+      {
+        "src": "/submit-form-json",
+        "dest": "/server.js"
+      }
+    ]
+  }
+  
