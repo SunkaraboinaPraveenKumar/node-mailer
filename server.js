@@ -11,8 +11,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -278,7 +278,7 @@ ${comments || 'No additional comments provided.'}
 // Add this route to your existing index.js file
 
 // Route for JSON submissions with file encoded as base64
-app.post('/submit-form-json', async (req, res) => {
+app.post('/submit-form/multipart', async (req, res) => {
   try {
     const { 
       name, email, phone, city, address,
