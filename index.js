@@ -11,8 +11,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -271,6 +271,199 @@ ${comments || 'No additional comments provided.'}
             message: 'Something went wrong. Please try again later.'
         });
     }
+});
+
+
+
+// Add this route to your existing index.js file
+
+// Route for JSON submissions with file encoded as base64
+app.post('/submit-form/multipart', async (req, res) => {
+  try {
+    const { 
+      name, email, phone, city, address,
+      propertyType, projectType, numWindows, budget,
+      comments, contactMethod, windowType, glazing,
+      // File data in JSON request
+      fileData, fileName, fileType
+    } = req.body;
+
+    // Validation
+    if (!name || !email) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Name and email are required fields.' 
+      });
+    }
+
+    // Email validation
+    if (!validateEmail(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Please provide a valid email address.' 
+      });
+    }
+
+    // Handle file if provided in base64 format
+    let filePath = null;
+    if (fileData && fileName) {
+      // Get file extension
+      const fileExt = path.extname(fileName).toLowerCase();
+      
+      // Validate file type
+      const allowedTypes = ['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx'];
+      if (!allowedTypes.includes(fileExt)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid file type. Only JPG, PNG, PDF, and DOC files are allowed.'
+        });
+      }
+      
+      // Ensure uploads directory exists
+      const uploadDir = path.join(__dirname, 'uploads');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      
+      // Create unique filename
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const uniqueFileName = 'file-' + uniqueSuffix + fileExt;
+      filePath = path.join(uploadDir, uniqueFileName);
+      
+      // Remove the base64 header if present
+      const base64Data = fileData.replace(/^data:([A-Za-z-+/]+);base64,/, '');
+      
+      // Write file to disk
+      fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+    }
+
+    // Format arrays consistently
+    const windowTypes = Array.isArray(windowType) 
+      ? windowType.join(', ') 
+      : windowType || 'None selected';
+
+    const glazingOptions = Array.isArray(glazing) 
+      ? glazing.join(', ') 
+      : glazing || 'None selected';
+
+    // Create email options
+    const mailOptions = {
+      from: process.env.EMAIL_USER || 'your-email@gmail.com',
+      to: process.env.RECIPIENT_EMAIL || 'recipient-email@example.com',
+      replyTo: email,
+      subject: `New Window Quote Request from ${name} (JSON Submission)`,
+      text: `
+New Quote Request - My Home Interiors
+
+Personal Details:
+Name: ${name}
+Email: ${email}
+Phone: ${phone || 'Not provided'}
+City/Location: ${city || 'Not provided'}
+Address: ${address || 'Not provided'}
+
+Project Details:
+Property Type: ${propertyType || 'Not specified'}
+Project Type: ${projectType || 'Not specified'}
+Window Types Required: ${windowTypes}
+Glazing Options Preferred: ${glazingOptions}
+Number of Windows: ${numWindows || 'Not specified'}
+Estimated Budget: ${budget || 'Not provided'}
+
+Contact Preferences:
+Preferred Contact Method: ${contactMethod || 'Not specified'}
+
+Additional Comments:
+${comments || 'No additional comments provided.'}
+      `,
+      html: `
+        <h2>New Quote Request - My Home Interiors</h2>
+        <h3>Personal Details:</h3>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Phone:</strong> ${phone || 'Not provided'}</p>
+        <p><strong>City/Location:</strong> ${city || 'Not provided'}</p>
+        <p><strong>Address:</strong> ${address || 'Not provided'}</p>
+        
+        <h3>Project Details:</h3>
+        <p><strong>Property Type:</strong> ${propertyType || 'Not specified'}</p>
+        <p><strong>Project Type:</strong> ${projectType || 'Not specified'}</p>
+        <p><strong>Window Types Required:</strong> ${windowTypes}</p>
+        <p><strong>Glazing Options Preferred:</strong> ${glazingOptions}</p>
+        <p><strong>Number of Windows:</strong> ${numWindows || 'Not specified'}</p>
+        <p><strong>Estimated Budget:</strong> ${budget || 'Not provided'}</p>
+        
+        <h3>Contact Preferences:</h3>
+        <p><strong>Preferred Contact Method:</strong> ${contactMethod || 'Not specified'}</p>
+        
+        <h3>Additional Comments:</h3>
+        <p>${comments ? comments.replace(/\n/g, '<br>') : 'No additional comments provided.'}</p>
+        
+        <p><em>Submitted via JSON API</em></p>
+      `
+    };
+
+    // Add attachment if file was uploaded
+    if (filePath && fileName) {
+      mailOptions.attachments = [{
+        filename: fileName,
+        path: filePath
+      }];
+    }
+
+    // Send email with better error handling and fallback
+    let emailSent = false;
+    let emailError = null;
+
+    try {
+      // Try primary transporter first
+      const transporter = createTransporter();
+      const info = await transporter.sendMail(mailOptions);
+      console.log('Message sent: %s', info.messageId);
+      emailSent = true;
+    } catch (primaryError) {
+      console.error('Primary email configuration failed:', primaryError);
+      emailError = primaryError;
+      
+      try {
+        // Try fallback configuration
+        const fallbackTransporter = createFallbackTransporter();
+        const fallbackInfo = await fallbackTransporter.sendMail(mailOptions);
+        console.log('Message sent with fallback: %s', fallbackInfo.messageId);
+        emailSent = true;
+      } catch (fallbackError) {
+        console.error('Fallback email configuration also failed:', fallbackError);
+        emailError = fallbackError;
+      }
+    }
+
+    // Clean up uploaded file after sending regardless of email success
+    if (filePath) {
+      fs.unlink(filePath, (err) => {
+        if (err) console.error('Error removing file:', err);
+      });
+    }
+
+    if (emailSent) {
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Thank you for your request. We will get back to you shortly!' 
+      });
+    } else {
+      // Log detailed error but return generic message to user
+      console.error('All email sending attempts failed:', emailError);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'We encountered an issue sending your request. Please try again or contact us directly.' 
+      });
+    }
+  } catch (error) {
+    console.error('Error processing JSON form submission:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Something went wrong. Please try again later.' 
+    });
+  }
 });
 
 // Health check endpoint

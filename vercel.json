@@ -1,16 +1,27 @@
 {
-    "version": 2,
-    "builds": [
-      {
-        "src": "/server.js",
-        "use": "@vercel/node"
-      }
-    ],
-    "routes": [
-      {
-        "src": "/submit-form/(*)",
-        "dest": "/server.js"
-      }
-    ]
-  }
-  
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/submit-form",
+      "dest": "/index.js"
+    },
+    {
+      "src": "/submit-form/multipart",
+      "dest": "/index.js"
+    },
+    {
+      "src": "/health",
+      "dest": "/index.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.js"
+    }
+  ]
+}
