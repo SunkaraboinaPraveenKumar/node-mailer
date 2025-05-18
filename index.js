@@ -206,17 +206,11 @@ ${Message || 'No message provided.'}
     }
 
     if (emailSent) {
-      return res.status(200).json({
-        success: true,
-        message: 'Thank you for your message. We will get back to you shortly!'
-      });
+      return res.redirect('/thank-you.html');
     } else {
       // Log detailed error but return generic message to user
       console.error('All email sending attempts failed:', emailError);
-      return res.status(500).json({
-        success: false,
-        message: 'We encountered an issue sending your message. Please try again or contact us directly.'
-      });
+      return res.redirect('/error.html');
     }
   } catch (error) {
     console.error('Error processing form submission:', error);
@@ -259,16 +253,10 @@ app.post('/subscribe', async (req, res) => {
     const info = await transporter.sendMail(mailOptions);
 
     console.log('Subscription email sent:', info.messageId);
-    return res.status(200).json({
-      success: true,
-      message: 'Subscription successful! Thank you.'
-    });
+    return res.redirect('/thank-you.html');
   } catch (error) {
     console.error('Error sending subscription email:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to process your subscription. Please try again later.'
-    });
+    return res.redirect('/error.html');
   }
 });
 
@@ -407,15 +395,9 @@ ${comments || 'None'}
 
       // 2h. Final response
       if (emailSent) {
-        return res.json({
-          success: true,
-          message: 'Thank you! Your quote request has been submitted.'
-        });
+        return res.redirect('/thank-you.html');
       } else {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to send email. Please try again later.'
-        });
+        return res.redirect('/error.html');
       }
 
     } catch (error) {
