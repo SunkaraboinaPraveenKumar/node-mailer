@@ -44,7 +44,7 @@ if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
 const createTransporter = () => {
   // Primary configuration
   return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST||'smtp.zoho.com',
+    host: process.env.EMAIL_HOST || 'smtp.zoho.com',
     port: process.env.EMAIL_PORT || 465,
     secure: true,
     auth: {
@@ -54,14 +54,14 @@ const createTransporter = () => {
     tls: {
       rejectUnauthorized: false
     },
-    debug:true
+    debug: true
   });
 };
 
 // Fallback transporter with alternative settings
 const createFallbackTransporter = () => {
   return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST||'smtp.zoho.com',
+    host: process.env.EMAIL_HOST || 'smtp.zoho.com',
     port: 587, // Alternative port
     secure: false, // Use TLS instead of SSL
     auth: {
@@ -135,7 +135,7 @@ app.post('/submit-contact-form', upload.single('file'), async (req, res) => {
       Message:
       ${Message || 'No message provided.'}
         `,
-        html: `
+      html: `
           <h2>New Contact Form Submission</h2>
           <h3>Personal Details:</h3>
           <p><strong>Name:</strong> ${Name}</p>
@@ -339,7 +339,7 @@ ${additionalComments || 'None'}
     };
 
     // Handle base64 attachments
-    if (fileUpload) {
+    if (fileUpload && fileUpload.base64) {
       mailOptions.attachments = [
         {
           filename: fileUpload.filename || 'file',
