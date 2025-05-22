@@ -248,24 +248,28 @@ app.post('/subscribe', async (req, res) => {
 // Add this route to your existing index.js file
 
 // Route for JSON submissions with file encoded as base64
-app.post('/submit-quote-form', async (req, res) => {
+app.post('/submit-quote-form', upload.array('fileUpload'), async (req, res) => {
   try {
     const {
       name, email, phone, city, address,
       propertyType, projectType, serviceType, windowsType, doorsType,
       colorPreference, numWindows, estimatedBudget,
-      contactMethod, bestTime, additionalComments,
-      fileUpload // array of base64-encoded files with filename and mimetype
+      contactMethod, bestTime, additionalComments
     } = req.body;
 
-    if (!name || !email || !phone) {
+    // Trim whitespace from required fields
+    const trimmedName = name ? name.trim() : '';
+    const trimmedEmail = email ? email.trim() : '';
+    const trimmedPhone = phone ? phone.trim() : '';
+
+    if (!trimmedName || !trimmedEmail || !trimmedPhone) {
       return res.status(400).json({
         success: false,
         message: 'Name, email, and phone are required fields.'
       });
     }
 
-    if (!validateEmail(email)) {
+    if (!validateEmail(trimmedEmail)) {
       return res.status(400).json({
         success: false,
         message: 'Please provide a valid email address.'
@@ -283,15 +287,15 @@ app.post('/submit-quote-form', async (req, res) => {
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: process.env.RECIPIENT_EMAIL,
-      replyTo: email,
-      subject: `New ${serviceType} Quote Request from ${name}`,
+      replyTo: trimmedEmail,
+      subject: `New ${serviceType || 'Service'} Quote Request from ${trimmedName}`,
       text: `
 New Quote Request
 
 Personal Details:
-Name: ${name}
-Email: ${email}
-Phone: ${phone}
+Name: ${trimmedName}
+Email: ${trimmedEmail}
+Phone: ${trimmedPhone}
 City: ${city || 'Not provided'}
 Address: ${address || 'Not provided'}
 
@@ -312,43 +316,40 @@ Additional Comments:
 ${additionalComments || 'None'}
       `,
       html: `
-        <h2>New ${serviceType} Quote Request</h2>
+        <h2>New ${serviceType || 'Service'} Quote Request</h2>
         <h3>Personal Details</h3>
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Phone:</strong> ${phone}</p>
-        <p><strong>City:</strong> ${city}</p>
-        <p><strong>Address:</strong> ${address}</p>
+        <p><strong>Name:</strong> ${trimmedName}</p>
+        <p><strong>Email:</strong> ${trimmedEmail}</p>
+        <p><strong>Phone:</strong> ${trimmedPhone}</p>
+        <p><strong>City:</strong> ${city || 'Not provided'}</p>
+        <p><strong>Address:</strong> ${address || 'Not provided'}</p>
 
         <h3>Project Details</h3>
-        <p><strong>Property Type:</strong> ${propertyType}</p>
-        <p><strong>Project Type:</strong> ${projectType}</p>
-        <p><strong>Service Type:</strong> ${serviceType}</p>
-        <p><strong>${serviceType === 'Windows' ? 'Window Type' : 'Door Type'}:</strong> ${windowsType || doorsType}</p>
-        <p><strong>Color Preference:</strong> ${colorPreference}</p>
-        <p><strong>Number of Windows:</strong> ${numWindows}</p>
-        <p><strong>Estimated Budget:</strong> ${estimatedBudget}</p>
+        <p><strong>Property Type:</strong> ${propertyType || 'Not specified'}</p>
+        <p><strong>Project Type:</strong> ${projectType || 'Not specified'}</p>
+        <p><strong>Service Type:</strong> ${serviceType || 'Not specified'}</p>
+        ${serviceDetails ? `<p><strong>${serviceType === 'Windows' ? 'Window Type' : 'Door Type'}:</strong> ${windowsType || doorsType}</p>` : ''}
+        <p><strong>Color Preference:</strong> ${colorPreference || 'Not specified'}</p>
+        <p><strong>Number of Windows:</strong> ${numWindows || 'Not specified'}</p>
+        <p><strong>Estimated Budget:</strong> ${estimatedBudget || 'Not specified'}</p>
 
         <h3>Contact Preferences</h3>
-        <p><strong>Contact Method:</strong> ${contactMethod}</p>
-        <p><strong>Best Time to Reach:</strong> ${bestTime}</p>
+        <p><strong>Contact Method:</strong> ${contactMethod || 'Not specified'}</p>
+        <p><strong>Best Time to Reach:</strong> ${bestTime || 'Not specified'}</p>
 
         <h3>Additional Comments:</h3>
         <p>${additionalComments || 'None'}</p>
       `
     };
 
-    // Handle base64 attachments
-    if (fileUpload && fileUpload.base64) {
-      mailOptions.attachments = [
-        {
-          filename: fileUpload.filename || 'file',
-          content: Buffer.from(fileUpload.base64, 'base64'),
-          contentType: fileUpload.mimetype
-        }
-      ];
+    // Handle file attachments
+    if (req.files && req.files.length > 0) {
+      mailOptions.attachments = req.files.map(file => ({
+        filename: file.originalname,
+        content: file.buffer,
+        contentType: file.mimetype
+      }));
     }
-
 
     const transporter = createTransporter();
     const info = await transporter.sendMail(mailOptions);
