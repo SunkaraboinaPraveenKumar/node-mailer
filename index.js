@@ -263,17 +263,11 @@ app.post('/submit-quote-form', upload.array('fileUpload'), async (req, res) => {
     const trimmedPhone = phone ? phone.trim() : '';
 
     if (!trimmedName || !trimmedEmail || !trimmedPhone) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name, email, and phone are required fields.'
-      });
+      return res.redirect('/error.html');
     }
 
     if (!validateEmail(trimmedEmail)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide a valid email address.'
-      });
+      return res.redirect('/error.html');
     }
 
     // Format service details
@@ -355,10 +349,10 @@ ${additionalComments || 'None'}
     const info = await transporter.sendMail(mailOptions);
 
     console.log('Quote form submitted: %s', info.messageId);
-    return res.status(200).json({ success: true, message: 'Form submitted successfully.' });
+    return res.redirect('/thank-you.html');
   } catch (err) {
     console.error('Error in quote form submission:', err);
-    return res.status(500).json({ success: false, message: 'Internal server error.' });
+    return res.redirect('/error.html');
   }
 });
 
