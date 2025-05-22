@@ -267,7 +267,7 @@ app.post('/subscribe', async (req, res) => {
 // Route for JSON submissions with file encoded as base64
 app.post(
   '/submit-quote-form',
-  upload.array('upload', 5), // Changed to array for multiple file uploads with limit of 5 files
+  upload.array('fileUpload', 5), // Changed to array for multiple file uploads with limit of 5 files
   async (req, res) => {
     try {
       // Destructure ALL fields from the form
