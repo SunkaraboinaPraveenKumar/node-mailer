@@ -16,24 +16,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Configure multer for file uploads with better validation
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, 'uploads');
-    // Create the uploads directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Create unique filename with original extension
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const fileExt = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + fileExt);
-  }
-});
-
+const memoryStorage = multer.memoryStorage();
 const fileFilter = (req, file, cb) => {
   // Accept only specific file types
   const allowedTypes = ['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx'];
@@ -47,7 +30,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-  storage: storage,
+  storage: memoryStorage, // Use memory storage instead of disk
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: fileFilter
 });
@@ -265,54 +248,50 @@ app.post('/subscribe', async (req, res) => {
 // Add this route to your existing index.js file
 
 // Route for JSON submissions with file encoded as base64
-app.post(
-  '/submit-quote-form',
-  upload.array('fileUpload', 5), // Changed to array for multiple file uploads with limit of 5 files
-  async (req, res) => {
-    try {
-      // Destructure ALL fields from the form
-      const {
-        name, email, phone, city, address,
-        propertyType, projectType, serviceType, windowsType, doorsType,
-        colorPreference, numWindows, estimatedBudget,
-        contactMethod, bestTime, additionalComments
-      } = req.body;
+app.post('/submit-quote-form', async (req, res) => {
+  try {
+    const {
+      name, email, phone, city, address,
+      propertyType, projectType, serviceType, windowsType, doorsType,
+      colorPreference, numWindows, estimatedBudget,
+      contactMethod, bestTime, additionalComments,
+      fileUpload // array of base64-encoded files with filename and mimetype
+    } = req.body;
 
-      // Basic validation
-      if (!name || !email || !phone) {
-        return res.status(400).json({
-          success: false,
-          message: 'Name, email, and phone are required fields.'
-        });
-      }
-      if (!validateEmail(email)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Please provide a valid email address.'
-        });
-      }
+    if (!name || !email || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, email, and phone are required fields.'
+      });
+    }
 
-      // Format service details based on selection
-      let serviceDetails = '';
-      if (serviceType === 'Windows' && windowsType) {
-        serviceDetails = `Window Type: ${windowsType}`;
-      } else if (serviceType === 'Doors' && doorsType) {
-        serviceDetails = `Door Type: ${doorsType}`;
-      }
+    if (!validateEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address.'
+      });
+    }
 
-      // Build mailOptions
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: process.env.RECIPIENT_EMAIL,
-        replyTo: email,
-        subject: `New ${serviceType} Quote Request from ${name}`,
-        text: `
+    // Format service details
+    let serviceDetails = '';
+    if (serviceType === 'Windows' && windowsType) {
+      serviceDetails = `Window Type: ${windowsType}`;
+    } else if (serviceType === 'Doors' && doorsType) {
+      serviceDetails = `Door Type: ${doorsType}`;
+    }
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: process.env.RECIPIENT_EMAIL,
+      replyTo: email,
+      subject: `New ${serviceType} Quote Request from ${name}`,
+      text: `
 New Quote Request
 
 Personal Details:
 Name: ${name}
 Email: ${email}
-Phone: ${phone || 'Not provided'}
+Phone: ${phone}
 City: ${city || 'Not provided'}
 Address: ${address || 'Not provided'}
 
@@ -323,7 +302,7 @@ Service Type: ${serviceType || 'Not specified'}
 ${serviceDetails}
 Color Preference: ${colorPreference || 'Not specified'}
 Number of Windows: ${numWindows || 'Not specified'}
-Estimated Budget: ${estimatedBudget || 'Not provided'}
+Estimated Budget: ${estimatedBudget || 'Not specified'}
 
 Contact Preferences:
 Method: ${contactMethod || 'Not specified'}
@@ -331,89 +310,56 @@ Best Time to Reach: ${bestTime || 'Not specified'}
 
 Additional Comments:
 ${additionalComments || 'None'}
-        `,
-        html: `
-          <h2>New ${serviceType} Quote Request</h2>
-          <h3>Personal Details</h3>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Phone:</strong> ${phone || 'Not provided'}</p>
-          <p><strong>City:</strong> ${city || 'Not provided'}</p>
-          <p><strong>Address:</strong> ${address || 'Not provided'}</p>
+      `,
+      html: `
+        <h2>New ${serviceType} Quote Request</h2>
+        <h3>Personal Details</h3>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Phone:</strong> ${phone}</p>
+        <p><strong>City:</strong> ${city}</p>
+        <p><strong>Address:</strong> ${address}</p>
 
-          <h3>Project Details</h3>
-          <p><strong>Property Type:</strong> ${propertyType || 'Not specified'}</p>
-          <p><strong>Project Type:</strong> ${projectType || 'Not specified'}</p>
-          <p><strong>Service Type:</strong> ${serviceType || 'Not specified'}</p>
-          ${serviceType === 'Windows' && windowsType ? `<p><strong>Window Type:</strong> ${windowsType}</p>` : ''}
-          ${serviceType === 'Doors' && doorsType ? `<p><strong>Door Type:</strong> ${doorsType}</p>` : ''}
-          <p><strong>Color Preference:</strong> ${colorPreference || 'Not specified'}</p>
-          <p><strong>Number of Windows:</strong> ${numWindows || 'Not specified'}</p>
-          <p><strong>Estimated Budget:</strong> ${estimatedBudget || 'Not provided'}</p>
+        <h3>Project Details</h3>
+        <p><strong>Property Type:</strong> ${propertyType}</p>
+        <p><strong>Project Type:</strong> ${projectType}</p>
+        <p><strong>Service Type:</strong> ${serviceType}</p>
+        <p><strong>${serviceType === 'Windows' ? 'Window Type' : 'Door Type'}:</strong> ${windowsType || doorsType}</p>
+        <p><strong>Color Preference:</strong> ${colorPreference}</p>
+        <p><strong>Number of Windows:</strong> ${numWindows}</p>
+        <p><strong>Estimated Budget:</strong> ${estimatedBudget}</p>
 
-          <h3>Contact Preferences</h3>
-          <p><strong>Method:</strong> ${contactMethod || 'Not specified'}</p>
-          <p><strong>Best Time to Reach:</strong> ${bestTime || 'Not specified'}</p>
+        <h3>Contact Preferences</h3>
+        <p><strong>Contact Method:</strong> ${contactMethod}</p>
+        <p><strong>Best Time to Reach:</strong> ${bestTime}</p>
 
-          <h3>Additional Comments</h3>
-          <p>${additionalComments ? additionalComments.replace(/\n/g, '<br>') : 'None'}</p>
-        `
-      };
+        <h3>Additional Comments:</h3>
+        <p>${additionalComments || 'None'}</p>
+      `
+    };
 
-      // Attach files if uploaded
-      if (req.files && req.files.length > 0) {
-        mailOptions.attachments = req.files.map(file => ({
-          filename: file.originalname,
-          path: file.path
-        }));
-      }
-
-      // Send email (primary + fallback)
-      let emailSent = false;
-      let lastError = null;
-
-      try {
-        const transporter = createTransporter();
-        await transporter.sendMail(mailOptions);
-        emailSent = true;
-      } catch (err) {
-        lastError = err;
-        console.error('Primary SMTP failed:', err);
-        try {
-          const fallback = createFallbackTransporter();
-          await fallback.sendMail(mailOptions);
-          emailSent = true;
-        } catch (err2) {
-          lastError = err2;
-          console.error('Fallback SMTP failed:', err2);
+    // Handle base64 attachments
+    if (fileUpload) {
+      mailOptions.attachments = [
+        {
+          filename: fileUpload.filename || 'file',
+          content: Buffer.from(fileUpload.base64, 'base64'),
+          contentType: fileUpload.mimetype
         }
-      }
-
-      // Cleanup uploaded files
-      if (req.files && req.files.length > 0) {
-        req.files.forEach(file => {
-          fs.unlink(file.path, (unlinkErr) => {
-            if (unlinkErr) console.error('Cleanup failed:', unlinkErr);
-          });
-        });
-      }
-
-      // Final response
-      if (emailSent) {
-        return res.redirect('/thank-you.html');
-      } else {
-        return res.redirect('/error.html');
-      }
-
-    } catch (error) {
-      console.error('Handler error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Server error. Please try again later.'
-      });
+      ];
     }
+
+
+    const transporter = createTransporter();
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log('Quote form submitted: %s', info.messageId);
+    return res.status(200).json({ success: true, message: 'Form submitted successfully.' });
+  } catch (err) {
+    console.error('Error in quote form submission:', err);
+    return res.status(500).json({ success: false, message: 'Internal server error.' });
   }
-);
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
